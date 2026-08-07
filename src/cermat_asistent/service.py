@@ -523,3 +523,128 @@ class CermatBackendService:
             self.conn,
             params=(redizo,),
         )
+
+    # ------------------------------------------------------------------
+    # Backtest – „Přijali by mě v roce X?"
+    # ------------------------------------------------------------------
+    def backtest_for_year(
+        self,
+        user_cjl: float,
+        user_mat: float,
+        prospech_category: str = "1.1-1.3",
+        backtest_year: int = 2025,
+        kraj_filter: str = "Všechny",
+        kategorie_filter: str = "Všechny",
+        obor_filter: str = "Všechny",
+        mesta_filter: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """
+        Vyhodnotí profil uchazeče oproti skutečným hranicím z daného roku.
+
+        Žádná predikce – čistá historická fakta.
+        Vrací DataFrame se sloupci: nazev_skoly, mesto, obor,
+        skutecny_pr_min, user_pr, prijat (bool), chance_label.
+        """
+        pr_info = self.get_user_percentile(
+            user_cjl, user_mat, prospech_category, backtest_year
+        )
+        user_pr = pr_info["effective_pr"]
+
+        query = """
+        SELECT
+            s.redizo, s.nazev_skoly, s.kraj, s.mesto,
+            o.kod_oboru, o.nazev_oboru, o.kategorie_oboru,
+            h.min_percentil, h.index_pretlaku, h.kapacita
+        FROM skoly s
+        JOIN skoly_historie h ON s.redizo = h.redizo
+        JOIN obory o ON o.kod_oboru = h.kod_oboru
+        WHERE h.rok = ?
+        """
+        df = pd.read_sql(query, self.conn, params=(backtest_year,))
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # Filtry
+        if kraj_filter != "Všechny":
+            df = df[df["kraj"] == kraj_filter]
+        if kategorie_filter != "Všechny":
+            df = df[df["kategorie_oboru"] == kategorie_filter]
+        if obor_filter != "Všechny":
+            df = df[df["nazev_oboru"] == obor_filter]
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # Preferovaná města
+        mesta_set = set(mesta_filter) if mesta_filter else set()
+
+        results: list[dict[str, Any]] = []
+        for _, row in df.iterrows():
+            skutecny = float(row["min_percentil"])
+            prijat = user_pr >= skutecny
+
+            if prijat:
+                label = "🟢 Přijat/a"
+            else:
+                label = f"🔴 Nepřijat/a (chybí {skutecny - user_pr:.1f} %)"
+
+            is_pref = (row["mesto"] in mesta_set) if mesta_set else True
+
+            results.append({
+                "nazev_skoly": row["nazev_skoly"],
+                "mesto": row["mesto"],
+                "obor": row["nazev_oboru"],
+                "skutecny_pr_min": round(skutecny, 1),
+                "user_pr": round(user_pr, 1),
+                "prijat": prijat,
+                "chance_label": label,
+                "pretlak": round(float(row["index_pretlaku"]), 2),
+                "is_preferred_location": is_pref,
+            })
+
+        df_out = pd.DataFrame(results)
+
+        # Řazení: preferovaná města první, pak od nejnáročnějších
+        df_out = df_out.sort_values(
+            ["is_preferred_location", "skutecny_pr_min"],
+            ascending=[False, False],
+        ).reset_index(drop=True)
+
+        return df_out
+
+    def get_available_backtest_years(self) -> list[int]:
+        """Vrací seznam dostupných roků pro backtest."""
+        df = pd.read_sql(
+            "SELECT DISTINCT rok FROM skoly_historie ORDER BY rok DESC",
+            self.conn,
+        )
+        return df["rok"].tolist()
+
+    def get_full_school_info(self, redizo: str) -> dict[str, Any]:
+        """
+        Vrací kompletní detailní kartu školy (všechny vyučované obory, vývoj kapacit a přihlášek).
+        """
+        query_school = "SELECT redizo, nazev_skoly, kraj, mesto FROM skoly WHERE redizo = ?"
+        df_sch = pd.read_sql(query_school, self.conn, params=(redizo,))
+        if df_sch.empty:
+            return {}
+
+        sch_info = df_sch.iloc[0].to_dict()
+
+        query_obory = """
+        SELECT
+            o.kod_oboru, o.nazev_oboru, o.kategorie_oboru,
+            h.rok, h.kapacita, h.prihlasky_p1, h.index_pretlaku, h.min_percentil
+        FROM skoly_historie h
+        JOIN obory o ON o.kod_oboru = h.kod_oboru
+        WHERE h.redizo = ?
+        ORDER BY o.nazev_oboru, h.rok ASC
+        """
+        df_hist = pd.read_sql(query_obory, self.conn, params=(redizo,))
+
+        return {
+            "info": sch_info,
+            "history": df_hist,
+        }
+

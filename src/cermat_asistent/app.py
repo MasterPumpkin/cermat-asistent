@@ -10,6 +10,7 @@ Kompletní dashboard pro odhad šancí na přijetí na střední školy:
 6. Plán B – alternativní obory při nízké šanci
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ import streamlit as st
 
 from cermat_asistent.config import DEFAULT_DB_PATH
 from cermat_asistent.db import init_db, seed_demo_data, seed_real_2026_data
+from cermat_asistent.pdf_export import generate_pdf_report
 from cermat_asistent.service import CermatBackendService
 
 # =====================================================================
@@ -65,22 +67,25 @@ st.sidebar.markdown("## 📋 Profil uchazeče")
 kraj = st.sidebar.selectbox(
     "Kraj",
     options=["Všechny"] + filters["kraje"],
+    key="pref_kraj",
 )
 kategorie = st.sidebar.selectbox(
     "Typ školy",
     options=["Všechny"] + filters["kategorie"],
+    key="pref_kategorie",
 )
 
 dynamic_filters = service.get_available_filters(kategorie_filter=kategorie)
 obor = st.sidebar.selectbox(
     "Preferovaný obor",
     options=["Všechny"] + dynamic_filters["obory"],
+    key="pref_obor",
 )
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📝 Očekávané body z testů")
-cjl = st.sidebar.slider("Český jazyk (max 50)", 0, 50, 35)
-mat = st.sidebar.slider("Matematika (max 50)", 0, 50, 30)
+cjl = st.sidebar.slider("Český jazyk (max 50)", 0, 50, 35, key="pref_cjl")
+mat = st.sidebar.slider("Matematika (max 50)", 0, 50, 30, key="pref_mat")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🏫 Školní prospěch")
@@ -88,6 +93,7 @@ prospech = st.sidebar.select_slider(
     "Průměr známek na vysvědčení (8. a 9. třída):",
     options=["1.0", "1.1-1.3", "1.4-1.8", "1.9+"],
     value="1.1-1.3",
+    key="pref_prospech",
     help=(
         "Upraví váš odhadovaný percentil (až o ±6 %) podle známek. Ředitelé "
         "škol dále udělují body za certifikáty (FCE/PET), olympiády a soutěže "
@@ -100,6 +106,7 @@ mesta = st.sidebar.multiselect(
     "Preferovaná města / spádová oblast",
     options=dostupna_mesta,
     default=[],
+    key="pref_mesta",
     help=(
         "Vyberte města, která jsou pro vás dopravně dostupná (např. Kutná Hora, Kolín, Čáslav). "
         "Školy z těchto měst budou upřednostněny v přehledu, doporučeních DiPSy i v Plánu B."
@@ -144,6 +151,76 @@ if pr_info["prospech_delta"] != 0:
     st.sidebar.caption(
         f"Korekce za prospěch: {pr_info['prospech_delta']:+.1f} % "
         f"(základ z testů: {pr_info['base_test_pr']:.1f} %)"
+    )
+
+# PDF export & Správa profilu
+st.sidebar.markdown("---")
+pdf_bytes = generate_pdf_report(
+    pr_info=pr_info,
+    df_schools=df_schools,
+    recommendation=recommendation,
+    plan_b_items=plan_b_items,
+    cjl=cjl,
+    mat=mat,
+    prospech=prospech,
+    kraj=kraj,
+    mesta=mesta if mesta else None,
+)
+st.sidebar.download_button(
+    label="📄 Stáhnout PDF report",
+    data=pdf_bytes,
+    file_name="cermat_report.pdf",
+    mime="application/pdf",
+    width="stretch",
+)
+
+with st.sidebar.expander("💾 Správa profilu (Uložit / Načíst)"):
+    uploaded_profile = st.file_uploader(
+        "📂 Načíst profil (.json)",
+        type=["json"],
+        key="profile_uploader",
+        help="Nahrajte dříve uložený profil ve formátu JSON.",
+    )
+    if uploaded_profile is not None:
+        try:
+            profile_data = json.load(uploaded_profile)
+            if isinstance(profile_data, dict):
+                if "kraj" in profile_data:
+                    st.session_state["pref_kraj"] = profile_data["kraj"]
+                if "kategorie" in profile_data:
+                    st.session_state["pref_kategorie"] = profile_data["kategorie"]
+                if "obor" in profile_data:
+                    st.session_state["pref_obor"] = profile_data["obor"]
+                if "cjl" in profile_data:
+                    st.session_state["pref_cjl"] = int(profile_data["cjl"])
+                if "mat" in profile_data:
+                    st.session_state["pref_mat"] = int(profile_data["mat"])
+                if "prospech" in profile_data:
+                    st.session_state["pref_prospech"] = profile_data["prospech"]
+                if "mesta" in profile_data and isinstance(profile_data["mesta"], list):
+                    st.session_state["pref_mesta"] = profile_data["mesta"]
+                st.success("Profil byl úspěšně načten!")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Chyba při načítání profilu: {e}")
+
+    export_profile = {
+        "version": "1.0",
+        "kraj": kraj,
+        "kategorie": kategorie,
+        "obor": obor,
+        "cjl": cjl,
+        "mat": mat,
+        "prospech": prospech,
+        "mesta": mesta,
+    }
+    export_json = json.dumps(export_profile, ensure_ascii=False, indent=2)
+    st.download_button(
+        label="💾 Uložit profil",
+        data=export_json,
+        file_name="cermat_profil.json",
+        mime="application/json",
+        width="stretch",
     )
 
 # =====================================================================
@@ -518,6 +595,323 @@ else:
         "(buď máte u vybraných oborů dostatečně vysokou šanci, nebo v databázi pro zadaná kritéria "
         "nejsou evidovány rizikové obory s příbuznými alternativami KKOV)."
     )
+# ----- 6. Co kdyby… – porovnání scénářů -----
+if not df_schools.empty:
+    st.markdown("---")
+    st.subheader("6. 🔄 Co kdyby… – Porovnání dvou scénářů")
+    st.caption(
+        "💡 Zadejte dva různé bodové výkony (např. slabší den vs. silnější den) "
+        "a porovnejte, jak se změní vaše šance u jednotlivých škol."
+    )
+
+    with st.expander("💡 Jak funguje porovnání scénářů?"):
+        st.markdown("""
+        ### K čemu slouží porovnání scénářů?
+        Tato sekce vám pomůže odpovědět na otázku: **„Co když se mi test povede lépe nebo hůře o pár bodů?"**
+
+        **Jak s tím pracovat:**
+        1. **Scénář A** (levý sloupec) – nastavte body pro *pesimistický* odhad (slabší den, těžší test).
+        2. **Scénář B** (pravý sloupec) – nastavte body pro *optimistický* odhad (povedený den, jednodušší test).
+        3. Ve srovnávací tabulce uvidíte u každé školy, jak se změní vaše šance.
+
+        **Jak číst tabulku výsledků:**
+        - **✅ Zlepšení** – Škola, u které se šance ve Scénáři B posune z rizikové/reálné na jistotu.
+        - **⬇️ Zhoršení** – Škola, u které se šance ve Scénáři B posune z jistoty/reálné na rizikovou.
+        - **Beze změny** – Šance zůstává stejná v obou scénářích.
+
+        💡 *Díky tomuto porovnání zjistíte, na kterých školách záleží na každém bodu, a kde máte bezpečnou rezervu i při horším dni.*
+        """)
+
+    col_sc_a, col_sc_b = st.columns(2)
+
+    with col_sc_a:
+        st.markdown("##### Scénář A")
+        sc_a_cjl = st.slider("ČJL (Scénář A)", 0, 50, max(0, cjl - 5), key="sc_a_cjl")
+        sc_a_mat = st.slider("MAT (Scénář A)", 0, 50, max(0, mat - 5), key="sc_a_mat")
+
+    with col_sc_b:
+        st.markdown("##### Scénář B")
+        sc_b_cjl = st.slider("ČJL (Scénář B)", 0, 50, min(50, cjl + 5), key="sc_b_cjl")
+        sc_b_mat = st.slider("MAT (Scénář B)", 0, 50, min(50, mat + 5), key="sc_b_mat")
+
+    eval_a = service.evaluate_schools_for_user(
+        user_cjl=sc_a_cjl,
+        user_mat=sc_a_mat,
+        prospech_category=prospech,
+        kraj_filter=kraj,
+        kategorie_filter=kategorie,
+        obor_filter=obor,
+        mesta_filter=mesta if mesta else None,
+    )
+    eval_b = service.evaluate_schools_for_user(
+        user_cjl=sc_b_cjl,
+        user_mat=sc_b_mat,
+        prospech_category=prospech,
+        kraj_filter=kraj,
+        kategorie_filter=kategorie,
+        obor_filter=obor,
+        mesta_filter=mesta if mesta else None,
+    )
+
+    df_a = eval_a["evaluated_schools"]
+    df_b = eval_b["evaluated_schools"]
+    pr_a = eval_a["pr_info"]
+    pr_b = eval_b["pr_info"]
+
+    # Metriky scénářů
+    mc1, mc2 = st.columns(2)
+    mc1.metric(
+        f"Scénář A ({sc_a_cjl + sc_a_mat} b.)",
+        f"{pr_a['effective_pr']:.1f} %",
+        delta=f"{pr_a['effective_pr'] - pr_info['effective_pr']:+.1f} % vs. aktuální",
+    )
+    mc2.metric(
+        f"Scénář B ({sc_b_cjl + sc_b_mat} b.)",
+        f"{pr_b['effective_pr']:.1f} %",
+        delta=f"{pr_b['effective_pr'] - pr_info['effective_pr']:+.1f} % vs. aktuální",
+    )
+
+    # Srovnávací tabulka
+    if not df_a.empty and not df_b.empty:
+        merge_cols = ["redizo", "kod_oboru", "nazev_skoly", "obor", "mesto"]
+        df_cmp = df_a[merge_cols + ["chance_label"]].merge(
+            df_b[merge_cols + ["chance_label"]],
+            on=merge_cols,
+            suffixes=(" (A)", " (B)"),
+        )
+
+        df_cmp["Změna"] = df_cmp.apply(
+            lambda r: "✅ Zlepšení"
+            if "Jistota" in str(r["chance_label (B)"]) and "Jistota" not in str(r["chance_label (A)"])
+            else (
+                "⬇️ Zhoršení"
+                if "Riziková" in str(r["chance_label (B)"]) and "Riziková" not in str(r["chance_label (A)"])
+                else "Beze změny"
+            ),
+            axis=1,
+        )
+
+        st.dataframe(
+            df_cmp.rename(columns={
+                "nazev_skoly": "Škola",
+                "obor": "Obor",
+                "mesto": "Město",
+                "chance_label (A)": f"Šance A ({sc_a_cjl + sc_a_mat} b.)",
+                "chance_label (B)": f"Šance B ({sc_b_cjl + sc_b_mat} b.)",
+            })[
+                [
+                    "Škola", "Obor", "Město",
+                    f"Šance A ({sc_a_cjl + sc_a_mat} b.)",
+                    f"Šance B ({sc_b_cjl + sc_b_mat} b.)",
+                    "Změna",
+                ]
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+
+        n_improved = (df_cmp["Změna"] == "✅ Zlepšení").sum()
+        n_worsened = (df_cmp["Změna"] == "⬇️ Zhoršení").sum()
+        if n_improved > 0 or n_worsened > 0:
+            st.caption(
+                f"📊 Celkem: **{n_improved}** škol se zlepšením, "
+                f"**{n_worsened}** se zhoršením šancí."
+            )
+
+# ----- 7. Backtest – „Přijali by mě loni?" -----
+st.markdown("---")
+st.subheader("7. ⏪ Backtest – Přijali by mě v minulých letech?")
+st.caption(
+    "💡 Porovnejte své aktuální body se skutečnými hranicemi přijetí z minulých ročníků. "
+    "Žádná predikce – čistá historická fakta."
+)
+
+with st.expander("💡 Jak funguje Backtest?"):
+    st.markdown("""
+    ### Co je Backtest?
+    Backtest bere vaše aktuální body z ČJL a MAT a porovná je se **skutečnými minimálními percentily**, které byly potřeba pro přijetí v daném ročníku.
+
+    **Jak s tím pracovat:**
+    1. Vyberte rok (2024, 2025 nebo 2026) v přepínači níže.
+    2. V tabulce uvidíte u každé školy, zda byste s vašimi body byli **přijati** (🟢) nebo **nepřijati** (🔴).
+    3. U nepřijatých škol se zobrazí, kolik procentních bodů vám chybělo.
+
+    **K čemu je to dobré:**
+    - Buduje důvěru v nástroj – vidíte konkrétní výsledek, ne odhad.
+    - Ukazuje, jak moc se hranice rok od roku mění.
+    - Pomáhá realisticky posoudit vaši úroveň: pokud byste ve 2 ze 3 let byli přijati, šance je solidní.
+    """)
+
+bt_years = service.get_available_backtest_years()
+if bt_years:
+    bt_year = st.radio(
+        "Zvolte ročník pro backtest:",
+        options=bt_years,
+        horizontal=True,
+        key="backtest_year",
+    )
+
+    df_bt = service.backtest_for_year(
+        user_cjl=cjl,
+        user_mat=mat,
+        prospech_category=prospech,
+        backtest_year=bt_year,
+        kraj_filter=kraj,
+        kategorie_filter=kategorie,
+        obor_filter=obor,
+        mesta_filter=mesta if mesta else None,
+    )
+
+    if not df_bt.empty:
+        n_total = len(df_bt)
+        n_prijat = df_bt["prijat"].sum()
+        n_neprijat = n_total - n_prijat
+
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("Celkem škol", n_total)
+        mc2.metric("🟢 Přijat/a", n_prijat)
+        mc3.metric("🔴 Nepřijat/a", n_neprijat)
+
+        st.dataframe(
+            df_bt[["chance_label", "nazev_skoly", "obor", "mesto", "skutecny_pr_min", "user_pr", "pretlak"]].rename(
+                columns={
+                    "chance_label": f"Výsledek ({bt_year})",
+                    "nazev_skoly": "Škola",
+                    "obor": "Obor",
+                    "mesto": "Město",
+                    "skutecny_pr_min": "Skutečný PR min",
+                    "user_pr": "Váš percentil",
+                    "pretlak": "Přetlak",
+                }
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+
+        pct_success = (n_prijat / n_total * 100) if n_total > 0 else 0
+        st.caption(
+            f"📊 S vašimi body byste v roce **{bt_year}** byli přijati na "
+            f"**{n_prijat} z {n_total}** škol ({pct_success:.0f} % úspěšnost)."
+        )
+    else:
+        st.info(f"Pro rok {bt_year} a zvolené filtry nejsou dostupná žádná data.")
+else:
+    st.info("V databázi nejsou dostupná historická data pro backtest.")
+
+
+# ----- 8. Detailní karta školy -----
+if not df_schools.empty:
+    st.markdown("---")
+    st.subheader("8. 🏫 Detailní karta školy")
+    st.caption(
+        "💡 Zobrazte si kompletní kartu vybrané střední školy – všechny vyučované obory, "
+        "vývoj kapacit, počty přihlášek a historickou náročnost."
+    )
+
+    with st.expander("💡 Jak pracovat s kartou školy?"):
+        st.markdown("""
+        ### Co karta školy zobrazuje?
+        Na rozdíl od hlavního přehledu, který zobrazuje konkrétní filtrované obory, karta školy nabízí **kompletní pohled na danou instituci**:
+
+        **Co zde najdete:**
+        1. **Všechny vyučované obory:** Zjistíte, zda škola nabízí i jiné příbuzné obory (např. vedle 4letého gymnázia i 8leté, nebo vedle IT oboru i Technické lyceum).
+        2. **Vývoj kapacit:** Zda škola v čase navyšuje kapacity (což zvyšuje vaše šance).
+        3. **Zájem uchazečů (Přetlak):** Kolik přihlášek na 1. místě připadá na 1 přijatého žáka.
+        4. **Historické hranice přijetí:** Vývoj minimálního potřebného percentilu v ročnících 2024, 2025 a 2026.
+        """)
+
+    # Unikátní školy z filtrů
+    unique_schools = (
+        df_schools[["redizo", "nazev_skoly", "mesto"]]
+        .drop_duplicates(subset=["redizo"])
+        .sort_values("nazev_skoly")
+    )
+
+    school_options = {
+        f"{row['nazev_skoly']} ({row['mesto']})": row["redizo"]
+        for _, row in unique_schools.iterrows()
+    }
+
+    selected_sch_label = st.selectbox(
+        "Vyberte školu pro zobrazení detailní karty:",
+        options=list(school_options.keys()),
+        key="detail_school_select",
+    )
+
+    if selected_sch_label:
+        selected_redizo = school_options[selected_sch_label]
+        sch_detail = service.get_full_school_info(selected_redizo)
+
+        if sch_detail and "info" in sch_detail:
+            info = sch_detail["info"]
+            hist_df = sch_detail["history"]
+
+            st.markdown(f"#### 🏫 {info['nazev_skoly']}")
+            st.caption(f"📍 **Město:** {info['mesto']} | 🗺️ **Kraj:** {info['kraj']} | 🆔 **REDIZO:** {info['redizo']}")
+
+            if not hist_df.empty:
+                # Metriky školy
+                latest_year = hist_df["rok"].max()
+                latest_data = hist_df[hist_df["rok"] == latest_year]
+                total_cap = latest_data["kapacita"].sum()
+                total_apps = latest_data["prihlasky_p1"].sum()
+                num_obory = latest_data["kod_oboru"].nunique()
+
+                c_d1, c_d2, c_d3 = st.columns(3)
+                c_d1.metric("Počet vyučovaných oborů", num_obory)
+                c_d2.metric(f"Celková kapacita ({latest_year})", f"{total_cap} žáků")
+                c_d3.metric(f"Přihlášky 1. priority ({latest_year})", f"{total_apps} uchazečů")
+
+                # Tabulka oborů a historie
+                st.markdown("##### 📋 Přehled oborů a historických výsledků")
+                st.dataframe(
+                    hist_df.rename(
+                        columns={
+                            "nazev_oboru": "Obor",
+                            "kod_oboru": "Kód oboru",
+                            "kategorie_oboru": "Kategorie",
+                            "rok": "Rok",
+                            "kapacita": "Kapacita",
+                            "prihlasky_p1": "Přihlášky (1. p.)",
+                            "index_pretlaku": "Přetlak",
+                            "min_percentil": "Min percentil",
+                        }
+                    )[
+                        [
+                            "Obor",
+                            "Kategorie",
+                            "Rok",
+                            "Kapacita",
+                            "Přihlášky (1. p.)",
+                            "Přetlak",
+                            "Min percentil",
+                        ]
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                )
+
+                # Plotly graf vývoje oborů na škole
+                fig_sch = go.Figure()
+                for obor_name, obor_group in hist_df.groupby("nazev_oboru"):
+                    fig_sch.add_trace(
+                        go.Scatter(
+                            x=obor_group["rok"],
+                            y=obor_group["min_percentil"],
+                            mode="lines+markers",
+                            name=obor_name,
+                            marker=dict(size=8),
+                        )
+                    )
+                fig_sch.update_layout(
+                    title=f"Vývoj minimálního percentilu podle oborů ({info['nazev_skoly']})",
+                    xaxis_title="Rok",
+                    yaxis_title="Minimální percentil (PR min)",
+                    yaxis=dict(range=[0, 100]),
+                    template="plotly_white",
+                    height=380,
+                )
+                st.plotly_chart(fig_sch, width="stretch")
 
 # ----- Footer -----
 st.markdown("---")
@@ -526,3 +920,4 @@ st.caption(
     "⚠️ Predikce slouží pouze jako orientační odhad | "
     "🔧 Cermat Asistent v0.1.0"
 )
+
