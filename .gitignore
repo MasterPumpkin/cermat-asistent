@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Testing & IDE
+.pytest_cache/
+.coverage
+.idea/
+.vscode/
+
+# Streamlit
+.streamlit/
+
+# Generated Database (regenerated using `uv run python -m cermat_asistent.db`)
+cermat.db
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
