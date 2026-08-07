@@ -1,4 +1,4 @@
-# 📖 Cermat Asistent – „Blbovzdorný" průvodce pro rodiče a žáky
+# 📖 Cermat Asistent – Praktický průvodce pro rodiče a žáky
 
 > **Jak snadno používat aplikaci a vytěžit z ní maximum během celého školního roku.**
 
