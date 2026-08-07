@@ -42,15 +42,27 @@ Aplikace pracuje s efektivními percentily, koriguje meziroční změny obtížn
 ### 4. 🎯 Reverzní kalkulačka bodů
 - Výpočet, kolik bodů z ČJL a MAT musíte získat pro přijetí na vybranou školu.
 - Dva režimy přípravy:
-  - **Vyvážený:** Stejný cílový percentil v obou předmětech.
+  - **Vyvážený:** Stejný cílové body z obou předmětů.
   - **Kompenzační:** Zadáte vaši silnější ČJL a kalkulačka dopočítá minimální nutné body z matematiky.
 
 ### 5. 💡 Plán B (Spádové alternativy)
 - Při rizikové šanci na vysněné škole systém automaticky vyhledá příbuzné obory podle **KKOV** *(např. IT → Technická lycea, Elektrotechnika; Gymnázium → Obchodní/Přírodovědná lycea)*.
 - **Prioritizace spádové oblasti:** Přednostně nabízí obory ve vašich zvolených preferovaných městech *(např. Kutná Hora, Kolín, Čáslav)*.
 
-### 6. ℹ️ Metodický průvodce & Nápovědy
-- Vysvětlení pravidla min. 60 % JPZ testy / max. 40 % školní část (jazykové certifikáty Cambridge FCE/PET, olympiády, soutěže a prospěch).
+### 6. 🔄 Co kdyby… (Porovnání dvou scénářů)
+- Porovnání dvou různých bodových výkony (např. pesimistický vs. optimistický odhad).
+- Přehledná tabulka změn šancí (zlepšení / zhoršení / beze změny).
+
+### 7. ⏪ Backtest („Přijali by mě loni?")
+- Vyhodnocení profilu uchazeče proti **skutečným historickým hranicím** zvoleného ročníku (2024, 2025, 2026).
+- Žádné predikce – čistá fakta o tom, na které školy byste byli v minulosti přijati.
+
+### 8. 🏫 Detailní karta školy
+- Zobrazení všech oborů vyučovaných na dané škole, vývoj kapacit, přihlášek a srovnávací graf náročnosti oborů.
+
+### 9. 📄 Export PDF reportu & 💾 Správa profilu (JSON)
+- **PDF Report:** Jednostránkový souhrnný výstup pro tisk nebo konzultaci s výchovným poradcem.
+- **Profil JSON:** Možnost uložit a znovu načíst kompletní nastavení filtru a bodů.
 
 ---
 
@@ -76,7 +88,7 @@ Aplikace je plně uzpůsobena pro nasazení zdarma na **Streamlit Community Clou
 
 ### 1. Klonování repozitáře
 ```bash
-git clone https://github.com/USER/cermat-asistent.git
+git clone https://github.com/MasterPumpkin/cermat-asistent.git
 cd cermat-asistent
 ```
 
@@ -122,6 +134,7 @@ cermat-asistent/
 │       ├── app.py              # Streamlit dashboard
 │       ├── config.py           # Konfigurace a parametry predikce
 │       ├── db.py               # SQLite schéma a ETL importy
+│       ├── pdf_export.py       # Generátor PDF reportů
 │       ├── predictor.py        # Statistický predikční engine
 │       └── service.py          # Backendové služby a logika
 ├── tests/                      # Pytest testovací sada (43 testů)
