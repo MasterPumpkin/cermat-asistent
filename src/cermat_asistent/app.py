@@ -62,6 +62,33 @@ filters = service.get_available_filters()
 # =====================================================================
 # Sidebar – Profil uchazeče
 # =====================================================================
+def apply_preset(cjl_val: int, mat_val: int) -> None:
+    st.session_state["pref_cjl"] = cjl_val
+    st.session_state["pref_mat"] = mat_val
+
+def apply_loaded_profile() -> None:
+    uploaded = st.session_state.get("profile_uploader")
+    if uploaded is not None:
+        try:
+            profile_data = json.load(uploaded)
+            if isinstance(profile_data, dict):
+                if "kraj" in profile_data:
+                    st.session_state["pref_kraj"] = profile_data["kraj"]
+                if "kategorie" in profile_data:
+                    st.session_state["pref_kategorie"] = profile_data["kategorie"]
+                if "obor" in profile_data:
+                    st.session_state["pref_obor"] = profile_data["obor"]
+                if "cjl" in profile_data:
+                    st.session_state["pref_cjl"] = int(profile_data["cjl"])
+                if "mat" in profile_data:
+                    st.session_state["pref_mat"] = int(profile_data["mat"])
+                if "prospech" in profile_data:
+                    st.session_state["pref_prospech"] = profile_data["prospech"]
+                if "mesta" in profile_data and isinstance(profile_data["mesta"], list):
+                    st.session_state["pref_mesta"] = profile_data["mesta"]
+        except Exception:
+            pass
+
 st.sidebar.markdown("## 📋 Profil uchazeče")
 
 kraj = st.sidebar.selectbox(
@@ -80,6 +107,29 @@ obor = st.sidebar.selectbox(
     "Preferovaný obor",
     options=["Všechny"] + dynamic_filters["obory"],
     key="pref_obor",
+)
+
+# Rychlé předvolby
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ⚡ Rychlé předvolby")
+cp1, cp2, cp3 = st.sidebar.columns(3)
+cp1.button(
+    "55 b.",
+    help="Průměrný žák (30 ČJL / 25 MAT)",
+    on_click=apply_preset,
+    args=(30, 25),
+)
+cp2.button(
+    "80 b.",
+    help="Jedničkář (42 ČJL / 38 MAT)",
+    on_click=apply_preset,
+    args=(42, 38),
+)
+cp3.button(
+    "92 b.",
+    help="Gymnázium (47 ČJL / 45 MAT)",
+    on_click=apply_preset,
+    args=(47, 45),
 )
 
 st.sidebar.markdown("---")
@@ -141,23 +191,6 @@ if not df_schools.empty:
 
     df_schools["skola_s_oborem"] = df_schools.apply(format_school_label, axis=1)
 
-# Rychlé předvolby
-st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚡ Rychlé předvolby")
-cp1, cp2, cp3 = st.sidebar.columns(3)
-if cp1.button("55 b.", help="Průměrný žák (30 ČJL / 25 MAT)"):
-    st.session_state["pref_cjl"] = 30
-    st.session_state["pref_mat"] = 25
-    st.rerun()
-if cp2.button("80 b.", help="Jedničkář (42 ČJL / 38 MAT)"):
-    st.session_state["pref_cjl"] = 42
-    st.session_state["pref_mat"] = 38
-    st.rerun()
-if cp3.button("92 b.", help="Gymnázium (47 ČJL / 45 MAT)"):
-    st.session_state["pref_cjl"] = 47
-    st.session_state["pref_mat"] = 45
-    st.rerun()
-
 # Sidebar metriky
 st.sidebar.markdown("---")
 col_s1, col_s2 = st.sidebar.columns(2)
@@ -192,34 +225,13 @@ st.sidebar.download_button(
 )
 
 with st.sidebar.expander("💾 Správa profilu (Uložit / Načíst)"):
-    uploaded_profile = st.file_uploader(
+    st.file_uploader(
         "📂 Načíst profil (.json)",
         type=["json"],
         key="profile_uploader",
+        on_change=apply_loaded_profile,
         help="Nahrajte dříve uložený profil ve formátu JSON.",
     )
-    if uploaded_profile is not None:
-        try:
-            profile_data = json.load(uploaded_profile)
-            if isinstance(profile_data, dict):
-                if "kraj" in profile_data:
-                    st.session_state["pref_kraj"] = profile_data["kraj"]
-                if "kategorie" in profile_data:
-                    st.session_state["pref_kategorie"] = profile_data["kategorie"]
-                if "obor" in profile_data:
-                    st.session_state["pref_obor"] = profile_data["obor"]
-                if "cjl" in profile_data:
-                    st.session_state["pref_cjl"] = int(profile_data["cjl"])
-                if "mat" in profile_data:
-                    st.session_state["pref_mat"] = int(profile_data["mat"])
-                if "prospech" in profile_data:
-                    st.session_state["pref_prospech"] = profile_data["prospech"]
-                if "mesta" in profile_data and isinstance(profile_data["mesta"], list):
-                    st.session_state["pref_mesta"] = profile_data["mesta"]
-                st.success("Profil byl úspěšně načten!")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Chyba při načítání profilu: {e}")
 
     export_profile = {
         "version": "1.0",
