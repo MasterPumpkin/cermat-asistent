@@ -338,58 +338,45 @@ if not df_schools.empty:
         f"🔴 **{n_reach}** v Riziku"
     )
 
-# Hlavní přehledné záložky (Tabs Navigation)
-tab_results, tab_prep, tab_more = st.tabs(
-    [
-        "📊 Výsledky & DiPSy strategie",
-        "🎯 Příprava & Kalkulačky",
-        "💡 Alternativy, Backtest & Detail školy",
+# ----- 1. Tabulka škol -----
+st.subheader("1. Přehled vyhodnocených škol")
+
+if not df_schools.empty:
+    st.caption(
+        "🟢 **Jistota** = percentil nad odhadovaným pásmem | "
+        "🟡 **Reálná** = v pásmu nejistoty (rozhodne den zkoušky) | "
+        "🔴 **Riziková** = pod odhadovanou hranicí"
+    )
+    show_cols = [
+        "chance_label",
+        "nazev_skoly",
+        "obor",
+        "mesto",
+        "pretlak_latest",
+        "pred_min_percentil",
+        "ci_lower",
+        "ci_upper",
+        "explanation",
     ]
-)
-
-# =====================================================================
-# Záložka 1: Výsledky & DiPSy strategie
-# =====================================================================
-with tab_results:
-    # ----- 1. Tabulka škol -----
-    st.subheader("1. Přehled vyhodnocených škol")
-
-    if not df_schools.empty:
-        st.caption(
-            "🟢 **Jistota** = percentil nad odhadovaným pásmem | "
-            "🟡 **Reálná** = v pásmu nejistoty (rozhodne den zkoušky) | "
-            "🔴 **Riziková** = pod odhadovanou hranicí"
-        )
-        show_cols = [
-            "chance_label",
-            "nazev_skoly",
-            "obor",
-            "mesto",
-            "pretlak_latest",
-            "pred_min_percentil",
-            "ci_lower",
-            "ci_upper",
-            "explanation",
-        ]
-        st.dataframe(
-            df_schools[show_cols].rename(
-                columns={
-                    "chance_label": "Šance",
-                    "nazev_skoly": "Škola",
-                    "obor": "Obor",
-                    "mesto": "Město",
-                    "pretlak_latest": "Přetlak",
-                    "pred_min_percentil": "Predikce PR min",
-                    "ci_lower": "Dolní odhad PR",
-                    "ci_upper": "Horní odhad PR",
-                    "explanation": "Důvod predikce",
-                }
-            ),
-            hide_index=True,
-            width="stretch",
-        )
-    else:
-        st.warning("Žádná škola neodpovídá vybraným filtrům.")
+    st.dataframe(
+        df_schools[show_cols].rename(
+            columns={
+                "chance_label": "Šance",
+                "nazev_skoly": "Škola",
+                "obor": "Obor",
+                "mesto": "Město",
+                "pretlak_latest": "Přetlak",
+                "pred_min_percentil": "Predikce PR min",
+                "ci_lower": "Dolní odhad PR",
+                "ci_upper": "Horní odhad PR",
+                "explanation": "Důvod predikce",
+            }
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+else:
+    st.warning("Žádná škola neodpovídá vybraným filtrům.")
 
 # ----- 2. Doporučení 1.–2.–3. priority -----
 st.markdown("---")
@@ -526,92 +513,84 @@ if not df_schools.empty:
             - 🟢/🔴 **Zelená/Červená tečkovaná čára:** Váš aktuálně vypočítaný efektivní percentil.
             """)
 
-# =====================================================================
-# Záložka 2: Příprava & Kalkulačky
-# =====================================================================
-with tab_prep:
-    # ----- 4. Reverzní kalkulačka -----
-    if not df_schools.empty:
-        st.markdown("---")
-        st.subheader("4. 🎯 Reverzní kalkulačka: Kolik bodů potřebuji?")
-        st.caption(
-            "💡 Školy jsou v nabídce řazeny přednostně podle vaší preferované spádové oblasti (označené ⭐) "
-            "a dále od nejnáročnějších oborů po méně náročné."
-        )
-
-        col_r1, col_r2 = st.columns(2)
-
-        with col_r1:
-            target_school_name = st.selectbox(
-                "Vyberte cílovou školu a obor:",
-                options=df_schools["skola_s_oborem"].unique(),
-                key="rev_calc_school",
-            )
-            target_row = df_schools[
-                df_schools["skola_s_oborem"] == target_school_name
-            ].iloc[0]
-
-            strategy = st.radio(
-                "Požadovaná úroveň jistoty:",
-                [
-                    "🟢 Sázka na jistotu (cca 95 % šance)",
-                    "🟡 Reálná šance (cca 50 % šance)",
-                ],
-                index=0,
-            )
-            safety_key = "Safe" if "jistotu" in strategy else "Realistic"
-
-        with col_r2:
-            mode = st.radio(
-                "Styl přípravy:",
-                [
-                    "Vyvážený (cílové body z obou předmětů)",
-                    "Zadám své silnější ČJL a dopočteme MAT",
-                ],
-            )
-
-            custom_cjl: float | None = None
-            if "silnější" in mode:
-                custom_cjl = float(
-                    st.slider(
-                        "Moje očekávané body z ČJL:",
-                        0,
-                        50,
-                        40,
-                        key="rev_calc_cjl",
-                    )
-                )
-
-        req_res = service.calculate_required_points_for_school(
-            redizo=target_row["redizo"],
-            kod_oboru=target_row["kod_oboru"],
-            safety_level=safety_key,
-            fixed_cjl_points=custom_cjl,
-        )
-
-        st.info(
-            f"Pro přijetí na **{target_school_name}** ({strategy.split('(')[0].strip()}) "
-            f"potřebujete dosáhnout celkového percentilu cca **{req_res['target_pr']:.1f} %**."
-        )
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Potřebné body ČJL", f"{req_res['req_cjl_points']} / 50 b.")
-        m2.metric("Potřebné body MAT", f"{req_res['req_mat_points']} / 50 b.")
-        m3.metric("Celkem bodů z JPZ", f"{req_res['total_points']} / 100 b.")
-
-        with st.expander("💡 Jak funguje reverzní kalkulačka?"):
-            st.markdown("""
-            - **Vyvážený styl:** Předpokládá vyrovnaný výkon v obou předmětech (stejný percentil z ČJL i MAT).
-            - **Kompenzační styl:** Zadáte vaše očekávané body z ČJL a kalkulačka dopočítá, kolik **nejméně** musíte získat z matematiky pro dosažení potřebného celkového percentilu.
-            """)
-
-# =====================================================================
-# Záložka 3: Alternativy, Backtest & Detail školy
-# =====================================================================
-with tab_more:
-    # ----- 5. Plán B -----
+# ----- 4. Reverzní kalkulačka -----
+if not df_schools.empty:
     st.markdown("---")
-    st.subheader("5. 💡 Plán B: Příbuzné obory s vysokou šancí na přijetí")
+    st.subheader("4. 🎯 Reverzní kalkulačka: Kolik bodů potřebuji?")
+    st.caption(
+        "💡 Školy jsou v nabídce řazeny přednostně podle vaší preferované spádové oblasti (označené ⭐) "
+        "a dále od nejnáročnějších oborů po méně náročné."
+    )
+
+    col_r1, col_r2 = st.columns(2)
+
+    with col_r1:
+        target_school_name = st.selectbox(
+            "Vyberte cílovou školu a obor:",
+            options=df_schools["skola_s_oborem"].unique(),
+            key="rev_calc_school",
+        )
+        target_row = df_schools[
+            df_schools["skola_s_oborem"] == target_school_name
+        ].iloc[0]
+
+        strategy = st.radio(
+            "Požadovaná úroveň jistoty:",
+            [
+                "🟢 Sázka na jistotu (cca 95 % šance)",
+                "🟡 Reálná šance (cca 50 % šance)",
+            ],
+            index=0,
+        )
+        safety_key = "Safe" if "jistotu" in strategy else "Realistic"
+
+    with col_r2:
+        mode = st.radio(
+            "Styl přípravy:",
+            [
+                "Vyvážený (cílové body z obou předmětů)",
+                "Zadám své silnější ČJL a dopočteme MAT",
+            ],
+        )
+
+        custom_cjl: float | None = None
+        if "silnější" in mode:
+            custom_cjl = float(
+                st.slider(
+                    "Moje očekávané body z ČJL:",
+                    0,
+                    50,
+                    40,
+                    key="rev_calc_cjl",
+                )
+            )
+
+    req_res = service.calculate_required_points_for_school(
+        redizo=target_row["redizo"],
+        kod_oboru=target_row["kod_oboru"],
+        safety_level=safety_key,
+        fixed_cjl_points=custom_cjl,
+    )
+
+    st.info(
+        f"Pro přijetí na **{target_school_name}** ({strategy.split('(')[0].strip()}) "
+        f"potřebujete dosáhnout celkového percentilu cca **{req_res['target_pr']:.1f} %**."
+    )
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Potřebné body ČJL", f"{req_res['req_cjl_points']} / 50 b.")
+    m2.metric("Potřebné body MAT", f"{req_res['req_mat_points']} / 50 b.")
+    m3.metric("Celkem bodů z JPZ", f"{req_res['total_points']} / 100 b.")
+
+    with st.expander("💡 Jak funguje reverzní kalkulačka?"):
+        st.markdown("""
+        - **Vyvážený styl:** Předpokládá vyrovnaný výkon v obou předmětech (stejný percentil z ČJL i MAT).
+        - **Kompenzační styl:** Zadáte vaše očekávané body z ČJL a kalkulačka dopočítá, kolik **nejméně** musíte získat z matematiky pro dosažení potřebného celkového percentilu.
+        """)
+
+# ----- 5. Plán B -----
+st.markdown("---")
+st.subheader("5. 💡 Plán B: Příbuzné obory s vysokou šancí na přijetí")
 
 with st.expander("💡 Jak funguje a jak číst Plán B?"):
     st.markdown("""
