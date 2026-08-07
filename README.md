@@ -54,15 +54,17 @@ Aplikace pracuje s efektivními percentily, koriguje meziroční změny obtížn
 
 ---
 
-## 🛠️ Technologie
+## ☁️ Nasazení na Streamlit Community Cloud (Deployment Guide)
 
-- **Language:** Python 3.13
-- **Package Manager:** `uv` (Fast Python package installer & resolver)
-- **Frontend Framework:** Streamlit
-- **Visualization:** Plotly
-- **Database:** SQLite 3
-- **Data Processing:** Pandas, NumPy
-- **Testing:** Pytest
+Aplikace je plně uzpůsobena pro nasazení zdarma na **Streamlit Community Cloud** (zahrnuje pre-built SQLite databázi `cermat.db` o velikosti pouze 2.2 MB a soubor `requirements.txt`).
+
+### Postup nasazení:
+1. Nahrajte repozitář na **GitHub**.
+2. Přihlaste se na [share.streamlit.io](https://share.streamlit.io).
+3. Klikněte na **"New app"**.
+4. Vyberte váš GitHub repozitář, větev `main` a nastavte:
+   - **Main file path:** `src/cermat_asistent/app.py`
+5. Klikněte na **"Deploy!"** a vaše aplikace bude za pár sekund veřejně dostupná online.
 
 ---
 
@@ -70,7 +72,7 @@ Aplikace pracuje s efektivními percentily, koriguje meziroční změny obtížn
 
 ### Požadavky
 - Python `>= 3.11` (doporučeno Python `3.13`)
-- Spravce baličků [`uv`](https://github.com/astral-sh/uv)
+- Správce balíčků [`uv`](https://github.com/astral-sh/uv)
 
 ### 1. Klonování repozitáře
 ```bash
@@ -106,10 +108,10 @@ uv run pytest tests/ -v
 
 ---
 
-## 📂 Štruktura projektu
+## 📂 Struktura projektu
 
 ```text
-data_skol/
+cermat-asistent/
 ├── data/                       # Zdrojová Cermat data za roky 2024, 2025 a 2026
 │   ├── 2024/
 │   ├── 2025/
@@ -126,9 +128,14 @@ data_skol/
 │   ├── test_predictor.py
 │   ├── test_service.py
 │   └── test_security_edge_cases.py
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions CI pipeline
 ├── .gitignore
+├── cermat.db                   # Pre-built SQLite databáze (2.2 MB)
 ├── LICENSE
 ├── pyproject.toml              # UV / Pip konfigurace
+├── requirements.txt            # Streamlit Cloud závislosti
 └── README.md
 ```
 

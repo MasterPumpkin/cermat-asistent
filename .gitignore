@@ -18,9 +18,6 @@ wheels/
 # Streamlit
 .streamlit/
 
-# Generated Database (regenerated using `uv run python -m cermat_asistent.db`)
-cermat.db
-
 # OS
 .DS_Store
 Thumbs.db
