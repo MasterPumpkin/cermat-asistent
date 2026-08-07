@@ -263,14 +263,29 @@ st.caption(
 
 # ----- Metodický průvodce & Vysvětlení -----
 with st.expander("ℹ️ Jak funguje Cermat Asistent & Průvodce přijímačkami", expanded=False):
-    tab1, tab2, tab3, tab4 = st.tabs(
+    tab0, tab1, tab2, tab3, tab4 = st.tabs(
         [
+            "🚀 Rychlý návod",
             "📊 Percentil vs. Body",
             "📜 Školní kritéria & Certifikáty",
             "🎯 DiPSy strategie (1.–3. místo)",
             "📈 Predikce a Pásmo nejistoty",
         ]
     )
+
+    with tab0:
+        st.markdown("""
+        ### 🧭 Rychlý průvodce pro rodiče a žáky
+        1. **Levý panel (Sidebar):** Vyberte váš **Kraj** a vaše **Preferovaná města** (např. Kutná Hora, Kolín). Školy v nich budou zvýrazněny **⭐**.
+        2. **Body z cvičných testů:** Využijte tlačítka **⚡ Rychlé předvolby** (`55 b.`, `80 b.`, `92 b.`) nebo nastavte přesné body na sliderech ČJL a MAT.
+        3. **Sledujte souhrnný zelený banner:** Hned pod tímto návodem uvidíte celkový počet škol v pásmu 🟢 Jistoty, 🟡 Reálné šance a 🔴 Rizika.
+        4. **Projděte si 8 sekcí dashboardu:**
+           - **Sekce 1–3:** Přehled škol, DiPSy strategie (1.–3. priorita) a Plotly graf trendu.
+           - **Sekce 4:** Reverzní kalkulačka (kolik bodů přesně potřebujete pro přijetí).
+           - **Sekce 5:** Plán B (příbuzné spádové alternativy KKOV při nízké šanci na vysněné škole).
+           - **Sekce 6–8:** Co kdyby scénáře, Backtest (2024–2026) a Detailní karta školy.
+        5. **Tisk & Uložení:** V sidebaru můžete stáhnout **📄 PDF report** pro konzultaci nebo **💾 Uložit profil (JSON)** pro příští návštěvu!
+        """)
 
     with tab1:
         st.markdown("""
